@@ -1,0 +1,139 @@
+<h2 class="sr-only">Interactive yearly clothing budget planner with $1,000 total to allocate across custom categories</h2>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+  .wrap { padding: 1.5rem 0; }
+  .summary-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 0.75rem 1rem; }
+  .metric-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+  .metric-value { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+  .progress-wrap { margin-bottom: 1.5rem; }
+  .progress-track { height: 8px; background: var(--color-background-secondary); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; background: #1D9E75; transition: width 0.2s, background 0.2s; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .categories { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.25rem; }
+  .cat-row { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 0.75rem 1rem; }
+  .cat-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .cat-icon { font-size: 18px; color: var(--color-text-secondary); }
+  .cat-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary); flex: 1; }
+  .cat-alloc { font-size: 14px; font-weight: 500; color: var(--color-text-primary); min-width: 52px; text-align: right; }
+  .cat-controls { display: flex; align-items: center; gap: 10px; }
+  .cat-controls input[type=range] { flex: 1; }
+  .cat-pct { font-size: 12px; color: var(--color-text-tertiary); min-width: 32px; text-align: right; }
+  .add-row { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+  .add-row input[type=text] { flex: 1; font-size: 14px; }
+  .add-row button { white-space: nowrap; font-size: 14px; }
+  .del-btn { background: none; border: none; cursor: pointer; color: var(--color-text-tertiary); font-size: 16px; padding: 0 2px; line-height: 1; }
+  .del-btn:hover { color: var(--color-text-danger, #A32D2D); }
+  .over { color: #A32D2D !important; }
+  .reset-btn { font-size: 13px; color: var(--color-text-secondary); background: none; border: none; cursor: pointer; text-decoration: underline; padding: 0; }
+</style>
+
+<div class="wrap">
+  <div class="summary-bar">
+    <div class="metric"><div class="metric-label">Total budget</div><div class="metric-value">$1,000</div></div>
+    <div class="metric"><div class="metric-label">Allocated</div><div class="metric-value" id="allocated">$0</div></div>
+    <div class="metric"><div class="metric-label">Remaining</div><div class="metric-value" id="remaining">$1,000</div></div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-label"><span>Budget used</span><span id="pct-label">0%</span></div>
+    <div class="progress-track"><div class="progress-fill" id="prog" style="width:0%"></div></div>
+  </div>
+
+  <div class="categories" id="cat-list"></div>
+
+  <div class="add-row">
+    <input type="text" id="new-cat-name" placeholder="Add a category (e.g. shoes, accessories…)" maxlength="32" />
+    <button onclick="addCategory()"><i class="ti ti-plus" aria-hidden="true"></i> Add</button>
+  </div>
+
+  <button class="reset-btn" onclick="resetAll()">Reset all to $0</button>
+</div>
+
+<script>
+const TOTAL = 1000;
+
+const defaults = [
+  { name: "Tops & shirts", icon: "ti-shirt", val: 0 },
+  { name: "Bottoms", icon: "ti-versions", val: 0 },
+  { name: "Outerwear", icon: "ti-wind", val: 0 },
+  { name: "Shoes", icon: "ti-shoe", val: 0 },
+  { name: "Accessories", icon: "ti-sunglasses", val: 0 },
+  { name: "Formal / event wear", icon: "ti-star", val: 0 },
+  { name: "Athletic wear", icon: "ti-run", val: 0 },
+];
+
+let categories = defaults.map(d => ({ ...d }));
+
+function getAllocated() {
+  return categories.reduce((s, c) => s + c.val, 0);
+}
+
+function render() {
+  const allocated = getAllocated();
+  const remaining = TOTAL - allocated;
+  const pct = Math.round((allocated / TOTAL) * 100);
+  const over = allocated > TOTAL;
+
+  document.getElementById("allocated").textContent = "$" + allocated.toLocaleString();
+  document.getElementById("allocated").className = "metric-value" + (over ? " over" : "");
+  document.getElementById("remaining").textContent = (over ? "-$" : "$") + Math.abs(remaining).toLocaleString();
+  document.getElementById("remaining").className = "metric-value" + (over ? " over" : "");
+  document.getElementById("pct-label").textContent = pct + "%";
+  const prog = document.getElementById("prog");
+  prog.style.width = Math.min(pct, 100) + "%";
+  prog.style.background = over ? "#E24B4A" : pct > 85 ? "#BA7517" : "#1D9E75";
+
+  const list = document.getElementById("cat-list");
+  list.innerHTML = "";
+  categories.forEach((cat, i) => {
+    const catPct = Math.round((cat.val / TOTAL) * 100);
+    const div = document.createElement("div");
+    div.className = "cat-row";
+    div.innerHTML = `
+      <div class="cat-top">
+        <i class="ti ${cat.icon} cat-icon" aria-hidden="true"></i>
+        <span class="cat-name">${cat.name}</span>
+        <span class="cat-alloc">$${cat.val.toLocaleString()}</span>
+        <button class="del-btn" onclick="removeCategory(${i})" aria-label="Remove ${cat.name}"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="cat-controls">
+        <input type="range" min="0" max="${TOTAL}" step="5" value="${cat.val}"
+          oninput="updateVal(${i}, +this.value)" />
+        <span class="cat-pct">${catPct}%</span>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function updateVal(i, v) {
+  categories[i].val = v;
+  render();
+}
+
+function addCategory() {
+  const inp = document.getElementById("new-cat-name");
+  const name = inp.value.trim();
+  if (!name) return;
+  categories.push({ name, icon: "ti-hanger", val: 0 });
+  inp.value = "";
+  render();
+}
+
+function removeCategory(i) {
+  categories.splice(i, 1);
+  render();
+}
+
+function resetAll() {
+  categories.forEach(c => c.val = 0);
+  render();
+}
+
+document.getElementById("new-cat-name").addEventListener("keydown", e => {
+  if (e.key === "Enter") addCategory();
+});
+
+render();
+</script>
